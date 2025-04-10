@@ -1,6 +1,5 @@
-from Mathz import *
-from browser import window
-np= window.nj
+from math import *
+import numpy as np
 
 class EEZYbotARM:
     """
