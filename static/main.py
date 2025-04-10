@@ -1,4 +1,4 @@
-from browser import document, window
+from browser import document, window, ajax
 
 
 THREE = window.THREE
@@ -22,7 +22,29 @@ renderer = None
 scene = None
 
 
+def receive_data():
+    # Request data from Flask
+    def on_complete(req):
+        if req.status == 200:
+            data = window.JSON.parse(req.responseText)
+            print("Received data:", data)
+            
+            # Handle "NaN" string and convert it back to actual NaN
+            for array in data:
+                # Convert "NaN" strings back to JavaScript NaN
+                array = [window.NaN if x == "NaN" else x for x in array]
+                print(f"Array: {array}")
 
+        else:
+            print("Error:", req.status)
+
+    req = ajax.Ajax()
+    req.bind('complete', on_complete)
+    req.open('GET', '/send_data', True)
+    req.send()
+
+# Call the function to get the data
+receive_data()
 
 def create_joint(x, y, z):
     """Create a joint (sphere) at the specified coordinates."""
@@ -97,6 +119,27 @@ def init():
     # sphere_geometry = SphereGeometry(5, 32, 32)  # Radius of 5 with 32 segments for a smooth sphere
     # sphere_material = MeshStandardMaterial.new({'color': 0x00ffff})  # Corrected instantiation with new
     # sphere = Mesh(sphere_geometry, sphere_material)
+    # Base = np.array([0, 0, 0])
+    #     J2_Pos = np.array([T01[0, 3], T01[1, 3], T01[2, 3]])  # Joint 2
+    #     J3_Pos = np.array([T02[0, 3], T02[1, 3], T02[2, 3]])  # Joint 3
+    #     # Joint 4. it is assumed that the origin of joint 4 and 5 coincide.
+    #     J4_Pos = np.array([T03[0, 3], T03[1, 3], T03[2, 3]])
+    #     J5_Pos = np.array([T04[0, 3], T04[1, 3], T04[2, 3]])
+    #     EE_Pos = np.array([TEE[0, 3], TEE[1, 3], TEE[2, 3]])
+    #     # --- Horarm joints
+    #     A_Pos = np.array([T0A[0, 3], T0A[1, 3], T0A[2, 3]])
+    #     B_Pos = np.array([T0B[0, 3], T0B[1, 3], T0B[2, 3]])
+
+    #     # Coordinates for each link.
+    #     Link1 = list(zip(Base, J2_Pos))   # From base to Joint 2
+    #     Link2 = list(zip(J2_Pos, J3_Pos))  # From Joint 2 to Joint 3
+    #     Link3 = list(zip(J3_Pos, J4_Pos))  # From Joint 3 to Joint 4
+    #     Link4 = list(zip(J4_Pos, J5_Pos))  # From Joint 4 to Joint 5
+    #     Link5 = list(zip(J5_Pos, EE_Pos))  # From Joint 5 to the end effector
+    #     # --- Horarm links
+    #     LinkA = list(zip(J2_Pos, A_Pos))  # From Joint 2 to Joint A
+    #     LinkB = list(zip(A_Pos, B_Pos))  # From Joint A to Joint B
+    #     LinkC = list(zip(B_Pos, J4_Pos))  # From Joint B to Joint 4
 
     # # Position the sphere
     # sphere.position.set(0, 0, 0)  # Position at origin
@@ -104,7 +147,7 @@ def init():
     joint1 = create_joint(0, 0, 0)  # Create a joint at the origin
     joint2 = create_joint(1, 7, 1)  # Create a joint above the first one
     joint3 = create_joint(5, 5, 0)  # Create a joint to the right of the first one
-	
+    joint4 = create_joint(0, 0, 0)  # Create a joint at the origin
 
     link1 = create_link(joint1, joint2)  # Create a link between the first two joints
     link2 = create_link(joint2, joint3)  # Create a link between the first and third joints
@@ -115,6 +158,40 @@ def init():
     scene.add(joint3)
     scene.add(link1)
     scene.add(link2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     # Floor setup

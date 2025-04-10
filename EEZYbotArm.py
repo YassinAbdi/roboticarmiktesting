@@ -380,60 +380,6 @@ class EEZYbotARM:
         LinkB = list(zip(A_Pos, B_Pos))  # From Joint A to Joint B
         LinkC = list(zip(B_Pos, J4_Pos))  # From Joint B to Joint 4
 
-    #     # create the figure
-    #     fig = plt.figure()
-
-    #     # add an axis
-    #     ax = fig.add_subplot(111, projection='3d')
-
-    #     # add labels to the plot
-    #     ax.set(title="3-d simulation of EEZYbotARM", xlabel="x (mm)",
-    #            ylabel="y (mm)", zlabel="z (mm)")
-
-    #     # set axis equal
-    #     # ax.set_aspect('equal')         # important!
-
-    #     # data for lines
-    #     linewidth = 3
-
-    #     # plot the lines
-    #     ax.plot(Link1[0], Link1[1], Link1[2],
-    #             label="Link1", linewidth=linewidth)
-    #     #ax.plot(Link2[0],Link2[1], Link2[2], label="Link2", linewidth=linewidth)
-    #     ax.plot(Link3[0], Link3[1], Link3[2],
-    #             label="Link2", linewidth=linewidth)
-    #     ax.plot(Link4[0], Link4[1], Link4[2],
-    #             label="Link3", linewidth=linewidth)
-    #     ax.plot(Link5[0], Link5[1], Link5[2],
-    #             label="Link4", linewidth=linewidth)
-
-    #     # --- plot the lines for the horarm links
-    #     ax.plot(LinkA[0], LinkA[1], LinkA[2],
-    #             linewidth=linewidth, color='lightgrey')
-    #     ax.plot(LinkB[0], LinkB[1], LinkB[2],
-    #             linewidth=linewidth, color='lightgrey')
-    #     ax.plot(LinkC[0], LinkC[1], LinkC[2],
-    #             linewidth=linewidth, color='lightgrey')
-
-    #     # add a legend
-    #     ax.legend()
-
-    #     # plot co-ordinate frames
-    #     plotCoOrd(T00, ax, lineColor='blue')
-    #     plotCoOrd(T02, ax, lineColor='orange')
-    #     plotCoOrd(T03, ax, lineColor='green')
-    #     plotCoOrd(T05_true, ax, lineColor='red')
-    #     plotCoOrd(TEE, ax, lineColor='grey')
-
-    # #     plotCoOrd(T0A, ax, lineColor='lightgrey') # uncommenting will show servo 3 linkage co-ordinate frames
-    # #     plotCoOrd(T0B, ax, lineColor='lightgrey')
-
-    #     # show the plot
-    #     # important code such that all axes display with equal scaling in 3d!
-    #     set_axes_equal(ax)
-    #     plt.show()
-
-        # define the position of the end effector
         x_EE = round(float(TEE[0, 3]), 3)
         y_EE = round(float(TEE[1, 3]), 3)
         z_EE = round(float(TEE[2, 3]), 3)
@@ -441,7 +387,7 @@ class EEZYbotARM:
         # Debug step
         print("plot_EEZYbotARM function --> End effector position (mm) is x: {}, y:{}, z:{}".format(x_EE, y_EE, z_EE))
 
-        
+        return Base, J2_Pos, J3_Pos, J4_Pos, J5_Pos, EE_Pos, A_Pos, B_Pos
 
 
 
