@@ -3,7 +3,7 @@ import http.server
 import socketserver
 import os
 
-PORT = 8003
+PORT = 8004
 Handler = http.server.SimpleHTTPRequestHandler
 os.chdir(os.path.dirname(__file__))
 httpd = socketserver.TCPServer(("", PORT), Handler)

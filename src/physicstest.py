@@ -1,6 +1,4 @@
 from browser import document, window
-from EEZYbotArm import EEZYbotARM_Mk2
-
 
 THREE = window.THREE
 
@@ -16,30 +14,10 @@ DirectionalLight = THREE.DirectionalLight.new
 OrbitControls = window.THREE.OrbitControls.new
 CubeTextureLoader = THREE.CubeTextureLoader.new
 
-
 # Globals
 camera = None
 renderer = None
 scene = None
-
-
-
-# init EEZYbotARM_Mk2
-eezybot = EEZYbotARM_Mk2(initial_q1=0, initial_q2=70, initial_q3=-100)
-# Assign cartesian position where we want the robot arm end effector to move to
-# (x,y,z in mm from centre of robot base)
-x = 240  # mm
-y = 85  # mm
-z = 200  # mm
-
-
-# Compute inverse kinematics
-a1, a2, a3 = eezybot.inverseKinematics(x, y, z)
-
-# Print the result
-print('To move the end effector to the cartesian position (mm) x={}, y={}, z={}, the robot arm joint angles (degrees)  are q1 = {}, q2= {}, q3 = {}'.format(x, y, z, a1, a2, a3))
-eezybot.plot()
-
 def create_joint(x, y, z):
     """Create a joint (sphere) at the specified coordinates."""
     # Create a sphere geometry for the joint
@@ -54,32 +32,44 @@ def create_joint(x, y, z):
 
 def create_link(start_joint, end_joint):
     """Create a link (cylinder) between two joints."""
-    # Vector difference
+    # Calculate the distance and direction between the two joints
     dx = end_joint.position.x - start_joint.position.x
     dy = end_joint.position.y - start_joint.position.y
     dz = end_joint.position.z - start_joint.position.z
     length = window.Math.sqrt(dx * dx + dy * dy + dz * dz)
 
-    # Cylinder geometry along Y-axis
-    cylinder_geometry = THREE.CylinderGeometry.new(1, 1, length, 32)
-    cylinder_material = MeshStandardMaterial.new({'color': 0x00ff00})
+    # Create a cylinder geometry for the link
+    cylinder_geometry = THREE.CylinderGeometry.new(1, 1, length, 32)  # Radius of 1 and 32 segments for smoothness
+
+    # Create a mesh for the link
+    cylinder_material = MeshStandardMaterial.new({'color': 0x00ff00})  # Green color for the link
     cylinder = Mesh(cylinder_geometry, cylinder_material)
 
-    # Midpoint between start and end
+    # Position the cylinder to be in the middle of the two joints
     cylinder.position.set(
         (start_joint.position.x + end_joint.position.x) / 2,
         (start_joint.position.y + end_joint.position.y) / 2,
         (start_joint.position.z + end_joint.position.z) / 2,
     )
-
-    # Direction from start to end
+    
+    # Calculate the direction vector and normalize it
     direction = window.THREE.Vector3.new(dx, dy, dz).normalize()
 
-    # Align cylinder's Y-axis to direction vector
-    up = window.THREE.Vector3.new(0, 1, 0)  # Y-axis
+    # Calculate the axis of rotation: we assume the "up" vector as [0, 1, 0]
+    up = window.THREE.Vector3.new(0, 1, 0)
+
+    # Calculate the rotation axis using the cross product
+    rotation_axis = up.cross(direction)
+
+    # Calculate the angle between the "up" vector and the direction vector
+    angle = window.Math.acos(up.dot(direction))
+
+    # Create a quaternion for the rotation
     quaternion = window.THREE.Quaternion.new()
-    quaternion.setFromUnitVectors(up, direction)
-    cylinder.setRotationFromQuaternion(quaternion)
+    quaternion.setFromAxisAngle(rotation_axis, angle)
+
+    # Apply the quaternion rotation to the cylinder
+    cylinder.rotation.setFromQuaternion(quaternion)
 
     return cylinder
 def init():
@@ -116,11 +106,9 @@ def init():
 
     # # Position the sphere
     # sphere.position.set(0, 0, 0)  # Position at origin
-	# # remember            x  z  y
     joint1 = create_joint(0, 0, 0)  # Create a joint at the origin
-    joint2 = create_joint(1, 7, 1)  # Create a joint above the first one
+    joint2 = create_joint(0, 7, 0)  # Create a joint above the first one
     joint3 = create_joint(5, 5, 0)  # Create a joint to the right of the first one
-	
 
     link1 = create_link(joint1, joint2)  # Create a link between the first two joints
     link2 = create_link(joint2, joint3)  # Create a link between the first and third joints
