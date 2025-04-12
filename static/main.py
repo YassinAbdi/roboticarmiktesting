@@ -1,5 +1,4 @@
-from browser import document, window, ajax
-
+from browser import document, window, ajax, bind
 
 THREE = window.THREE
 
@@ -20,23 +19,47 @@ CubeTextureLoader = THREE.CubeTextureLoader.new
 camera = None
 renderer = None
 scene = None
+processed_data = []
+
+
+# joints and links
+joint1 = None
+joint2 = None
+joint3 = None
+joint4 = None
+link1 = None
+link2 = None
+link3 = None
 
 
 def receive_data():
-    # Request data from Flask
     def on_complete(req):
+        global processed_data
         if req.status == 200:
-            data = window.JSON.parse(req.responseText)
-            print("Received data:", data)
-            
-            # Handle "NaN" string and convert it back to actual NaN
-            for array in data:
-                # Convert "NaN" strings back to JavaScript NaN
-                array = [window.NaN if x == "NaN" else x for x in array]
-                print(f"Array: {array}")
+            raw_data = window.JSON.parse(req.responseText)
+            #print("✅ Received raw data:", req.responseText)
+
+            processed_data = []  # Reset processed data
+
+            for i, array in enumerate(raw_data):
+                try:
+                    # Convert None to NaN where needed
+                    cleaned = [window.NaN if x is None else x for x in array]
+
+                    # Avoid printing objects with potential None directly
+                    #print(f" Array {i} (safe): {[str(x) for x in cleaned]}")
+
+                    # Add to processed list
+                    processed_data.append(cleaned)
+
+                except Exception as e:
+                    print(f" Error processing array {i}:", e)
+
+            # ➕ You can now work with `processed_data` safely (e.g., visualization, plotting)
+            # Example: pass to a drawing or plotting function here
 
         else:
-            print("Error:", req.status)
+            print(" Error loading data. HTTP Status:", req.status)
 
     req = ajax.Ajax()
     req.bind('complete', on_complete)
@@ -45,6 +68,54 @@ def receive_data():
 
 # Call the function to get the data
 receive_data()
+
+@bind(document, "keydown")
+def on_keydown(evt):
+    global joint1, joint2, joint3, joint4
+    global link1, link2, link3
+    global processed_data
+    if evt.key == " ":
+        print("🟦 Spacebar pressed! Processed data:")
+        for i, row in enumerate(processed_data):
+            print(f"{i}: {[str(x) for x in row]}")
+    if evt.key == "Enter":
+        print("🟦 Enter pressed! Sending data to server...")
+        # Send data to the server
+        print(joint1.position.x, joint1.position.y, joint1.position.z)
+        print(joint2.position.x, joint2.position.y, joint2.position.z)
+        print(joint3.position.x, joint3.position.y, joint3.position.z)
+        print(joint4.position.x, joint4.position.y, joint4.position.z)
+        joint1.position.x = processed_data[0][0]
+        joint1.position.z = processed_data[0][1]
+        joint1.position.y = processed_data[0][2]
+        joint2.position.x = processed_data[1][0]
+        joint2.position.z = processed_data[1][1]
+        joint2.position.y = processed_data[1][2]
+        joint3.position.x = processed_data[2][0]
+        joint3.position.z = processed_data[2][1]
+        joint3.position.y = processed_data[2][2]
+        joint4.position.x = processed_data[3][0]
+        joint4.position.z = processed_data[3][1]
+        joint4.position.y = processed_data[3][2]
+        # Update the links based on the new joint positions
+        update_links()
+
+def update_links():
+    """Update the links based on the current joint positions."""
+    global link1, link2, link3
+
+    # Update the links' positions and orientations
+    link1.geometry.dispose()  # Dispose of the old geometry
+    link1 = create_link(joint1, joint2)  # Create a new link between joint1 and joint2
+    scene.add(link1)  # Add the new link to the scene
+
+    link2.geometry.dispose()  # Dispose of the old geometry
+    link2 = create_link(joint2, joint3)  # Create a new link between joint2 and joint3
+    scene.add(link2)  # Add the new link to the scene
+
+    link3.geometry.dispose()  # Dispose of the old geometry
+    link3 = create_link(joint3, joint4)  # Create a new link between joint3 and joint4
+    scene.add(link3)  # Add the new link to the scene
 
 def create_joint(x, y, z):
     """Create a joint (sphere) at the specified coordinates."""
@@ -90,6 +161,9 @@ def create_link(start_joint, end_joint):
     return cylinder
 def init():
     global camera, renderer, scene
+    global joint1, joint2, joint3, joint4
+    global link1, link2, link3
+    global processed_data
 
     scene = Scene()
 
@@ -147,17 +221,20 @@ def init():
     joint1 = create_joint(0, 0, 0)  # Create a joint at the origin
     joint2 = create_joint(1, 7, 1)  # Create a joint above the first one
     joint3 = create_joint(5, 5, 0)  # Create a joint to the right of the first one
-    joint4 = create_joint(0, 0, 0)  # Create a joint at the origin
+    joint4 = create_joint(7, 5, 0)  # Create a joint at the origin
 
     link1 = create_link(joint1, joint2)  # Create a link between the first two joints
     link2 = create_link(joint2, joint3)  # Create a link between the first and third joints
+    link3 = create_link(joint3, joint4)  # Create a link between the first and fourth joints
 
     # Add items to the scene
     scene.add(joint1)
     scene.add(joint2)
     scene.add(joint3)
+    scene.add(joint4)
     scene.add(link1)
     scene.add(link2)
+    scene.add(link3)
 
 
 
@@ -223,7 +300,7 @@ def init():
 
 def animate(*args):
     window.requestAnimationFrame(animate)
-
+    
     # Optional: Animate the sphere (move it around or scale it)
     # angle = window.Math.sin(window.performance.now() / 1000) * window.Math.PI / 4
     # sphere.position.set(3 * window.Math.cos(angle), 2, 0)

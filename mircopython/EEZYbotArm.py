@@ -80,15 +80,15 @@ class EEZYbotARM:
 
         # Check given angles are within limits, else raise exception
         if q1 < self.q1_min or q1 > self.q1_max:
-            raise Exception('Value for q1 is outside joint limits. Joint limits in degrees are ({},{})'.format(
+            print('Value for q1 is outside joint limits. Joint limits in degrees are ({},{})'.format(
                 self.q1_min, self.q1_max))
 
         if q2 < self.q2_min or q2 > self.q2_max:
-            raise Exception('Value for q2 is outside joint limits. Joint limits in degrees are ({},{})'.format(
+            print('Value for q2 is outside joint limits. Joint limits in degrees are ({},{})'.format(
                 self.q2_min, self.q2_max))
 
         if q3 < q3_min or q3 > q3_max:
-            raise Exception(
+            print(
                 'Value for q3 is outside joint limits. Joint limits in degrees are ({},{})'.format(q3_min, q3_max))
 
     def forwardKinematics(self, **kwargs):
