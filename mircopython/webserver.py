@@ -3,6 +3,7 @@ import socket
 import machine
 from machine import Pin
 import time
+import math
 
 # Wi-Fi credentials
 SSID = "the realest"
@@ -14,8 +15,8 @@ sta.active(True)
 sta.connect(SSID, PASSWORD)
 
 # Define constants
-DIR = 23
-STEP = 22
+DIR = 19
+STEP = 18
 STEPS_PER_REV = 100
 
 # Initialize pins
@@ -35,14 +36,14 @@ def step_motor(delay_us, direction):
 
 
 # Track current position
-current_position = 0  # Start at step 0
+current_position_1 = 0  # Start at step 0
 
-def move_to_position(target_position, step_delay_us=2000):
+def move_to_position1(target_position, step_delay_us=2000):
     """Move the stepper motor to a specific position based on user input."""
-    global current_position
+    global current_position_1
 
     # Calculate steps required
-    steps_needed = target_position - current_position
+    steps_needed = target_position - current_position_1
     direction = 1 if steps_needed > 0 else 0  # 1 for CW, 0 for CCW
     dir_pin.value(direction)
 
@@ -55,9 +56,121 @@ def move_to_position(target_position, step_delay_us=2000):
         time.sleep_us(step_delay_us)
 
     # Update current position
-    current_position = target_position
-    print(f"Reached position: {current_position}")
+    current_position_1 = target_position
+    print(f"Reached position: {current_position_1}")
 
+
+current_position_2 = 0  # Start at step 0
+
+# Define constants
+DIR2 = 23
+STEP2 = 22
+STEPS_PER_REV2 = 100
+
+# Initialize pins
+dir_pin2 = Pin(DIR2, Pin.OUT)
+step_pin2 = Pin(STEP2, Pin.OUT)
+
+def step_motor2(delay_us, direction):
+    dir_pin2.value(direction)  # Set direction
+    print("Spinning Clockwise..." if direction else "Spinning Anti-Clockwise...")
+
+    for _ in range(STEPS_PER_REV2):
+        step_pin2.value(1)
+        time.sleep_us(delay_us)
+        step_pin2.value(0)
+        time.sleep_us(delay_us)
+
+def move_to_position2(target_position, step_delay_us=2000):
+    """Move the stepper motor to a specific position based on user input."""
+    global current_position_2
+
+    # Calculate steps required
+    steps_needed = target_position - current_position_2
+    direction = 1 if steps_needed > 0 else 0  # 1 for CW, 0 for CCW
+    dir_pin2.value(direction)
+
+    print(f"Moving to position {target_position} ({'CW' if direction else 'CCW'})")
+
+    for _ in range(abs(steps_needed)):
+        step_pin2.value(1)
+        time.sleep_us(step_delay_us)
+        step_pin2.value(0)
+        time.sleep_us(step_delay_us)
+
+    # Update current position
+    current_position_2 = target_position
+    print(f"Reached position: {current_position_2}")
+
+# Motor and gear setup
+steps_per_rev = 200  # 1.8° stepper motor
+microsteps = 1       # Microstepping factor
+gear_ratio_base = 2.6
+gear_ratio_arm1 = 2.6
+gear_ratio_arm2 = 2.6
+
+# Track the current position of the arm
+current_pos = [0, 0, 0]  # x, y, z
+
+def angle_to_steps(angle, gear_ratio):
+    """
+    Convert angle (degrees) to stepper motor steps based on gear ratio and microstepping.
+    """
+    total_steps_per_deg = ((steps_per_rev * microsteps)/360)
+    steps = angle * total_steps_per_deg
+    return int(steps)
+
+def move_to_angle(b, a1, a2, g):
+    """
+    Convert angles to stepper motor steps based on gear ratio and microstepping.
+    """
+    base_steps = angle_to_steps(b + 90, gear_ratio_base)        # Base: 0° means pointing forward
+
+    # Arm1: 90° is home (step=0), subtract 90
+    arm1_steps = angle_to_steps(a1 - 90, gear_ratio_arm1)
+
+    # Arm2: adjust to your real zero (let's assume 0° = -101 offset for now)
+    arm2_steps = angle_to_steps(a2 + 101, gear_ratio_arm2)  # You can change this too
+
+    print("Stepper motor commands:")
+    print(f"  Base motor: {base_steps} steps")
+    print(f"  Arm1 motor: {arm1_steps} steps")
+    print(f"  Arm2 motor: {arm2_steps} steps")
+    print(f"  Gripper: {g}° (manual or servo)")
+    # Here you would send the steps to the motor driver
+    move_to_position1(arm1_steps*-1)
+    move_to_position2(arm2_steps)
+
+def move_to_pos(x, y, z, g):
+    """
+    Compute joint angles to reach target position (x, y, z) and convert to motor steps.
+    Uses delta from current_pos and updates it afterward.
+    """
+    dx = x - current_pos[0]
+    dy = y - current_pos[1]
+    dz = z - current_pos[2]
+
+    print(f"Moving delta: dx={dx}, dy={dy}, dz={dz}")
+
+    # Use target pos to compute angles
+    b = math.atan2(y, x) * (180 / math.pi)
+    l = math.sqrt(x**2 + y**2)
+    h = math.sqrt(l**2 + z**2)
+    phi = math.atan2(z, l) * (180 / math.pi)
+    theta = math.acos(min(max(h / 2 / 75, -1), 1)) * (180 / math.pi)
+
+    a1 = phi + theta
+    a2 = phi - theta
+
+    print(f"Calculated angles (degrees):")
+    print(f"  Base: {b:.2f}, Arm1: {a1:.2f}, Arm2: {a2:.2f}")
+
+    move_to_angle(b, a1, a2, g)
+
+    # Update current position after moving
+    current_pos[0] = x
+    current_pos[1] = y
+    current_pos[2] = z
 
 while not sta.isconnected():
     pass
@@ -70,6 +183,9 @@ led = machine.Pin(LED_PIN, machine.Pin.OUT)
 led_state = 0  # Track LED state
 clockwise_state = 0
 counterclockwise_state = 0
+x_pos = 0
+y_pos = 0
+z_pos = 0
 # Function to return HTML page with button
 def web_page():
     btn_state = "ON" if led_state else "OFF"
@@ -100,13 +216,21 @@ def web_page():
         <input type="number" name="position" min="0" max="100" required>
         <input type="submit" value="Move">
     </form>
-    <p>Current position: {current_position}</p>
+    <p>Current position: {current_position_1}</p>
     <p>Upload G-code file:</p>
     <form method="POST" enctype="multipart/form-data" action="/upload">
         <input type="file" name="file">
         <input type="submit" value="Upload">
     </form>
-    </body>
+    
+    <p>Move to position (x, y, z):</p>
+    <form action="/smove_to_pos" method="get">
+        <input type="number" name="x" placeholder="X" required>
+        <input type="number" name="y" placeholder="Y" required>
+        <input type="number" name="z" placeholder="Z" required>
+        <input type="submit" value="Move">
+    </form>
+
     </html>"""
     return html
 
@@ -132,12 +256,12 @@ while True:
     if "GET /clockwise" in request:
         print("Toggling Stepper")
         clockwise_state = not clockwise_state  # Toggle state
-        step_motor(2500, 1)  # Clockwise rotation
+        step_motor2(2500, 1)  # Clockwise rotation
     
     if "GET /antiwise" in request:
         print("Toggling Stepper Anti")
         counterclockwise_state = not counterclockwise_state  # Toggle state
-        step_motor(2500, 0)  # Anti-clockwise rotation
+        step_motor2(2500, 0)  # Anti-clockwise rotation
 
     # add a rest call for moving to a specific position
     if "GET /move_to" in request:
@@ -145,7 +269,34 @@ while True:
         # Extract position from request
         position = int(request.split('=')[1].split(' ')[0])
         print(f"Moving to position {position}")
-        move_to_position(position)
+        move_to_position2(position)
+    
+    # get x, y, z from the request
+    if "GET /smove_to_pos" in request:
+        print("Moving to specific x, y, z position")
+        # Extract x, y, z from request
+        params = request.split(' ')[1].split('?')[1].split('&')
+        x = int(params[0].split('=')[1])
+        y = int(params[1].split('=')[1])
+        z = int(params[2].split('=')[1])
+        print(f"Moving to position x={x}, y={y}, z={z}")
+        move_to_pos(x, y, z, 0)  # Assuming g is not used here
+        #reset current position
+        current_position_1 = 0
+        current_position_2 = 0
+        
+
+    # return current pos 
+    if "GET /current_pos" in request:
+        print("Returning current position")
+        response = f"Current position: {current_pos}"
+        conn.send("HTTP/1.1 200 OK\n")
+        conn.send("Content-Type: text/plain\n")
+        conn.send("Connection: close\n\n")
+        conn.sendall(response.encode())
+        conn.close()
+        continue
+
 
     if "POST /upload" in request:
         print("Receiving file...")
