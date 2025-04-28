@@ -104,7 +104,7 @@ def move_to_position2(target_position, step_delay_us=2000):
 
 # Motor and gear setup
 steps_per_rev = 200  # 1.8° stepper motor
-microsteps = 1       # Microstepping factor
+microsteps = 16       # Microstepping factor
 gear_ratio_base = 2.6
 gear_ratio_arm1 = 2.6
 gear_ratio_arm2 = 2.6
@@ -140,6 +140,8 @@ def move_to_angle(b, a1, a2, g):
     # Here you would send the steps to the motor driver
     move_to_position1(arm1_steps*-1)
     move_to_position2(arm2_steps)
+    
+    
 
 def move_to_pos(x, y, z, g):
     """
@@ -183,6 +185,7 @@ led = machine.Pin(LED_PIN, machine.Pin.OUT)
 led_state = 0  # Track LED state
 clockwise_state = 0
 counterclockwise_state = 0
+selected_motor = 1
 x_pos = 0
 y_pos = 0
 z_pos = 0
@@ -208,12 +211,15 @@ def web_page():
     <p>LED is <strong>{btn_state}</strong></p>
     <a href="/toggle"><button class="button {'on' if led_state else 'off'}">Toggle LED</button></a>
     <p>turn clock wise is <strong>{btn2_state}</strong></p>
+    <p>Select motor:</p>
+    <a href="/motor1"><button class="button {'on' if selected_motor == 1 else 'off'}">Motor 1</button></a>
+    <a href="/motor2"><button class="button {'on' if selected_motor == 2 else 'off'}">Motor 2</button></a>
     <a href="/clockwise"><button class="button {'on' if clockwise_state else 'off'}">Toggle clockwise</button></a>
     <p>turn counter clock wise is <strong>{btn3_state}</strong></p>
     <a href="/antiwise"><button class="button {'on' if counterclockwise_state else 'off'}">Toggle counter-clockwise</button></a>
     <p>Move to specific position (0-100):</p>
     <form action="/move_to" method="get">
-        <input type="number" name="position" min="0" max="100" required>
+        <input type="number" name="position" min="0" max="3200" required>
         <input type="submit" value="Move">
     </form>
     <p>Current position: {current_position_1}</p>
@@ -256,20 +262,36 @@ while True:
     if "GET /clockwise" in request:
         print("Toggling Stepper")
         clockwise_state = not clockwise_state  # Toggle state
-        step_motor2(2500, 1)  # Clockwise rotation
-    
+        if selected_motor == 1:
+            step_motor(2500, 1)
+        if selected_motor == 2:
+            step_motor2(2500, 1)  # Clockwise rotation
+        
+    if "GET /motor1" in request:
+        print("Selected Motor 1")
+        selected_motor = 1
+    if "GET /motor2" in request:    
+        print("Selected Motor 2")
+        selected_motor = 2
     if "GET /antiwise" in request:
         print("Toggling Stepper Anti")
         counterclockwise_state = not counterclockwise_state  # Toggle state
-        step_motor2(2500, 0)  # Anti-clockwise rotation
+        if selected_motor == 1:
+            step_motor(2500, 0)
+        if selected_motor == 2: 
+            step_motor2(2500, 0)  # Anti-clockwise rotation
 
     # add a rest call for moving to a specific position
     if "GET /move_to" in request:
         print("Moving to specific position")
         # Extract position from request
         position = int(request.split('=')[1].split(' ')[0])
+        
         print(f"Moving to position {position}")
-        move_to_position2(position)
+        if(selected_motor == 1):
+            move_to_position1(position)
+        if(selected_motor == 2):
+            move_to_position2(position)
     
     # get x, y, z from the request
     if "GET /smove_to_pos" in request:
@@ -281,9 +303,9 @@ while True:
         z = int(params[2].split('=')[1])
         print(f"Moving to position x={x}, y={y}, z={z}")
         move_to_pos(x, y, z, 0)  # Assuming g is not used here
-        #reset current position
-        current_position_1 = 0
-        current_position_2 = 0
+        # #reset current position
+        # current_position_1 = 0
+        # current_position_2 = 0
         
 
     # return current pos 

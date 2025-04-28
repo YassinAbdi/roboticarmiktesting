@@ -6,7 +6,7 @@ import ast
 from time import sleep
 # Motor and gear setup
 steps_per_rev = 200  # 1.8° stepper motor
-microsteps = 1       # Microstepping factor
+microsteps = 16       # Microstepping factor
 gear_ratio_base = 2.6
 gear_ratio_arm1 = 2.6
 gear_ratio_arm2 = 2.6
@@ -38,7 +38,7 @@ def angle_to_steps(angle, gear_ratio):
     """
     Convert angle (degrees) to stepper motor steps based on gear ratio and microstepping.
     """
-    total_steps_per_deg = (steps_per_rev * microsteps)/360
+    total_steps_per_deg = ((steps_per_rev * microsteps)/360)
     steps = angle * total_steps_per_deg
     return int(steps)
 
@@ -178,8 +178,8 @@ if __name__ == "__main__":
     #move_to_pos(current_pos[0], current_pos[1], current_pos[2], 90)
     #move_to_pos(200, 0, 0, 90)
     #move_robot_to_pos(200, 0, 0, 90)
-    move_robot_to_pos(200, 0, 0, 90)
-    sleep(3)
+    move_robot_to_pos(150, 0, 30, 90)
+    sleep(30)
     move_robot_to_pos(0, 0, 50, 90)
     while True:
         plt.pause(0.1)  # Keep the plot open
