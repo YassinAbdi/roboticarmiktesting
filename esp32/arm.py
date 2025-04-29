@@ -68,7 +68,7 @@ class Arm():
         
         print("Spinning Clockwise..." if direction else "Spinning Anti-Clockwise...")
 
-        for _ in range(self.M1_step_per_rev):
+        for _ in range(self.steps_per_rev):
             step_pin.value(1)
             time.sleep_us(delay_us)
             step_pin.value(0)

@@ -1,63 +1,123 @@
 from microdot import Microdot
 import time
-import math
 from ArmConfig import *
 import arm as arm
 
-
 if MIRCOPYTHON:
-    from microdot import Microdot
-    import network
-    import socket
-    import machine
     from machine import Pin
+     
 
-
-# connect to the network
-if MIRCOPYTHON:
-    # Setup Wi-Fi connection
-    sta = network.WLAN(network.STA_IF)
-    sta.active(True)
-    sta.connect(SSID, PASSWORD)
-    while not sta.isconnected():
-        print("Connecting to Wi-Fi...")
-        time.sleep(1)
-    print("Connected to Wi-Fi")
-    print("IP Address:", sta.ifconfig()[0])
 
 app = Microdot()
 arm_instance = arm.Arm()
-print(arm_instance.move_to_pos(0, 0, 0,0))
 
-html = '''<!DOCTYPE html>
-<html>
-    <head>
-        <title>Microdot Example Page</title>
-        <meta charset="UTF-8">
-    </head>
-    <body>
-        <div>
-            <h1>Microdot Example Page</h1>
-            <p>Hello from Microdot!</p>
-            <p><a href="/shutdown">Click to shutdown the server</a></p>
 
-        </div>
-    </body>
-</html>
-'''
+# Load HTML from a file
+def load_html(filename):
+    try:
+        with open(filename, 'r') as f:
+            return f.read()
+    except Exception as e:
+        print("Failed to load HTML:", str(e))
+        return "<h1>Failed to load page</h1>"
 
+html = load_html('index.html')
+
+# Global states
+led_state = False
+clockwise_state = False
+counterclockwise_state = False
+selected_motor = 1
+current_position_1 = 0
+current_position_2 = 0
+
+# Initialize GPIO pins
+LED_PIN = 2  # GPIO pin for the LED
+
+# GPIO setup
+if MIRCOPYTHON:
+    led = Pin(LED_PIN, Pin.OUT)
+    led.value(led_state)  # Initialize LED state
 
 @app.route('/')
-async def hello(request):
+async def index(request):
+    print("Serving index.html")
     return html, 200, {'Content-Type': 'text/html'}
 
+@app.route('/state')
+async def state(request):
+    print("Getting state")
+    return {
+        'led_state': led_state,
+        'clockwise_state': clockwise_state,
+        'counterclockwise_state': counterclockwise_state,
+        'selected_motor': selected_motor,
+        'current_position_1': current_position_1,
+        'current_position_2': current_position_2
+    }
 
-@app.route('/shutdown')
-async def shutdown(request):
-    print("shutdown")
-    request.app.shutdown()
-    return 'The server is shutting down...'
+@app.route('/toggle')
+async def toggle_led(request):
+    global led_state
+    led_state = not led_state
+    led.value(led_state)  # Update GPIO
+    # Also actually toggle the LED GPIO if needed here
+    return {'status': 'ok', 'led_state': led_state}
 
+@app.route('/clockwise')
+async def toggle_clockwise(request):
+    global clockwise_state
+    clockwise_state = not clockwise_state
+
+    # Actually move the selected motor a few steps clockwise
+    direction = 1  # Clockwise
+    print(f"Rotating motor {selected_motor} clockwise")
+    arm_instance.step_motor(delay_us=2000, direction=direction, motor=selected_motor)
+
+    return {'status': 'ok', 'clockwise_state': clockwise_state}
+
+@app.route('/antiwise')
+async def toggle_counterclockwise(request):
+    global counterclockwise_state
+    counterclockwise_state = not counterclockwise_state
+
+    # Actually move the selected motor a few steps counterclockwise
+    direction = 0  # Counterclockwise
+    print(f"Rotating motor {selected_motor} counterclockwise")
+    arm_instance.step_motor(delay_us=2000, direction=direction, motor=selected_motor)
+
+    return {'status': 'ok', 'counterclockwise_state': counterclockwise_state}
+
+@app.route('/motor1')
+async def motor1(request):
+    global selected_motor
+    selected_motor = 1
+    print("Selected motor 1")
+    return {'status': 'ok'}
+
+@app.route('/motor2')
+async def motor2(request):
+    global selected_motor
+    selected_motor = 2
+    print("Selected motor 2")
+    return {'status': 'ok'}
+
+
+
+@app.route('/get_positionM1')
+async def get_positionM1(request):
+    global current_position_1
+    # Get the current position of motor 1
+    current_position_1 = arm_instance.M1_current_position
+    print(f"Motor 1 current position: {current_position_1}")
+    return {'current_position': current_position_1}
+@app.route('/get_positionM2')
+async def get_positionM2(request):
+    global current_position_2
+    # Get the current position of motor 2
+    current_position_2 = arm_instance.M2_current_position
+    print(f"Motor 2 current position: {current_position_2}")
+    return {'current_position': current_position_2}
 
 @app.route('/move')
 async def move(request):
@@ -78,7 +138,5 @@ async def move(request):
     except Exception as e:
         print("Move error:", str(e))
         return {'error': str(e)}, 500
-
-
 
 app.run(debug=True)

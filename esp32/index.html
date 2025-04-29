@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>MicroPython Web Server</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+    body { text-align: center; font-family: Arial, sans-serif; }
+    .button { padding: 15px 30px; font-size: 20px; margin: 10px; cursor: pointer; }
+    .on { background-color: green; color: white; }
+    .off { background-color: red; color: white; }
+</style>
+<script>
+    async function toggleLED() {
+        await fetch('/toggle');
+        location.reload();
+    }
+    async function toggleClockwise() {
+        await fetch('/clockwise');
+        location.reload();
+    }
+    async function toggleCounterClockwise() {
+        await fetch('/antiwise');
+        location.reload();
+    }
+    async function selectMotor(motor) {
+        await fetch('/motor' + motor);
+        location.reload();
+    }
+</script>
+</head>
+<body>
+<h1>ESP Web Server</h1>
+
+<p>LED is <strong id="led_state">Unknown</strong></p>
+<button class="button" onclick="toggleLED()">Toggle LED</button>
+
+<p>Turn Clockwise is <strong id="clockwise_state">Unknown</strong></p>
+<button class="button" onclick="toggleClockwise()">Toggle Clockwise</button>
+
+<p>Turn Counter-Clockwise is <strong id="counterclockwise_state">Unknown</strong></p>
+<button class="button" onclick="toggleCounterClockwise()">Toggle Counter-Clockwise</button>
+
+<p>Select motor:</p>
+<button class="button" onclick="selectMotor(1)">Motor 1</button>
+<button class="button" onclick="selectMotor(2)">Motor 2</button>
+
+<p>Move to specific position (0-3200):</p>
+<form action="/move_to" method="get">
+    <input type="number" name="position" min="0" max="3200" required>
+    <input type="submit" value="Move">
+</form>
+
+<p>Upload G-code file:</p>
+<form method="POST" enctype="multipart/form-data" action="/upload">
+    <input type="file" name="file">
+    <input type="submit" value="Upload">
+</form>
+
+<p>Move to position (x, y, z):</p>
+<form action="/move" method="get">
+    <input type="number" name="x" placeholder="X" required>
+    <input type="number" name="y" placeholder="Y" required>
+    <input type="number" name="z" placeholder="Z" required>
+    <input type="submit" value="Move">
+</form>
+<p>motor 1 current position is <strong id="motor1_pos">Unknown</strong></p>
+<button class="button" onclick="getPositionM1()">Get Position M1</button>
+
+<p>motor 2 current position is <strong id="motor2_pos">Unknown</strong></p>
+<button class="button" onclick="getPositionM2()">Get Position M2</button>
+
+<script>
+    async function updateStates() {
+        const res = await fetch('/state');
+        const data = await res.json();
+        document.getElementById('led_state').innerText = data.led_state ? "ON" : "OFF";
+        document.getElementById('clockwise_state').innerText = data.clockwise_state ? "ON" : "OFF";
+        document.getElementById('counterclockwise_state').innerText = data.counterclockwise_state ? "ON" : "OFF";
+        document.getElementById('motor1_pos').innerText = data.current_position_1;
+        document.getElementById('motor2_pos').innerText = data.current_position_2;
+    }
+    //SLEEP BEFORE UPDATING
+    setTimeout(() => {
+        updateStates();
+    }, 1000);
+</script>
+
+</body>
+</html>
