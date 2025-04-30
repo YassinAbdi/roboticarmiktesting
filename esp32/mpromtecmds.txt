@@ -6,3 +6,4 @@ mpremote connect /dev/ttyUSB0 fs cp :test.py :scripts/test.py
 mpremote connect /dev/ttyUSB0 fs cp index.html :index.html
 mpremote connect /dev/ttyUSB0 fs cp testdot.py :testdot.py
 mpremote connect /dev/ttyUSB0 fs cp arm.py :arm.py
+mpremote connect /dev/ttyUSB0 fs cp webserver.py :webserver.py

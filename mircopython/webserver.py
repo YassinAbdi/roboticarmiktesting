@@ -120,27 +120,50 @@ def angle_to_steps(angle, gear_ratio):
     steps = angle * total_steps_per_deg
     return int(steps)
 
-def move_to_angle(b, a1, a2, g):
+def move_to_angle(b, a1, a2, g, step_delay_us=2000):
     """
-    Convert angles to stepper motor steps based on gear ratio and microstepping.
+    Convert angles to stepper motor steps and move motors simultaneously.
     """
-    base_steps = angle_to_steps(b + 90, gear_ratio_base)        # Base: 0° means pointing forward
-
-    # Arm1: 90° is home (step=0), subtract 90
+    base_steps = angle_to_steps(b + 90, gear_ratio_base)
     arm1_steps = angle_to_steps(a1 - 90, gear_ratio_arm1)
-
-    # Arm2: adjust to your real zero (let's assume 0° = -101 offset for now)
-    arm2_steps = angle_to_steps(a2 + 101, gear_ratio_arm2)  # You can change this too
+    arm2_steps = angle_to_steps(a2 + 101, gear_ratio_arm2)
 
     print("Stepper motor commands:")
     print(f"  Base motor: {base_steps} steps")
     print(f"  Arm1 motor: {arm1_steps} steps")
     print(f"  Arm2 motor: {arm2_steps} steps")
-    print(f"  Gripper: {g}° (manual or servo)")
-    # Here you would send the steps to the motor driver
-    move_to_position1(arm1_steps*-1)
-    move_to_position2(arm2_steps)
-    
+    print(f"  Gripper: {g}°")
+
+    # Compute step deltas
+    steps1 = -arm1_steps
+    steps2 = -arm2_steps
+    dir1 = 1 if steps1 > 0 else 0
+    dir2 = 1 if steps2 > 0 else 0
+
+    dir_pin.value(dir1)
+    dir_pin2.value(dir2)
+
+    steps1 = abs(steps1)
+    steps2 = abs(steps2)
+    max_steps = max(steps1, steps2)
+
+    for i in range(max_steps):
+        if i < steps1:
+            step_pin.value(1)
+        if i < steps2:
+            step_pin2.value(1)
+
+        time.sleep_us(step_delay_us)
+
+        step_pin.value(0)
+        step_pin2.value(0)
+
+        time.sleep_us(step_delay_us)
+
+    global current_position_1, current_position_2
+    current_position_1 += steps1 if dir1 else -steps1
+    current_position_2 += steps2 if dir2 else -steps2
+
     
 
 def move_to_pos(x, y, z, g):
@@ -153,7 +176,7 @@ def move_to_pos(x, y, z, g):
     dz = z - current_pos[2]
 
     print(f"Moving delta: dx={dx}, dy={dy}, dz={dz}")
-
+    print(f"Current position: {current_pos}")
     # Use target pos to compute angles
     b = math.atan2(y, x) * (180 / math.pi)
     l = math.sqrt(x**2 + y**2)
@@ -298,9 +321,9 @@ while True:
         print("Moving to specific x, y, z position")
         # Extract x, y, z from request
         params = request.split(' ')[1].split('?')[1].split('&')
-        x = int(params[0].split('=')[1])
-        y = int(params[1].split('=')[1])
-        z = int(params[2].split('=')[1])
+        x = float(params[0].split('=')[1])
+        y = float(params[1].split('=')[1])
+        z = float(params[2].split('=')[1])
         print(f"Moving to position x={x}, y={y}, z={z}")
         move_to_pos(x, y, z, 0)  # Assuming g is not used here
         # #reset current position

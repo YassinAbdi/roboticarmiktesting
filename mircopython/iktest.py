@@ -173,13 +173,80 @@ def move_robot_to_pos(x, y, z, g):
         print("Error sending position:", e)
 
 
+list_of_gcode = [   
+"G0",
+"G1",
+"G2",
+"G3",
+"G4",
+"G28",
+"G90",
+"G91",
+"G92",
+"M0",
+"M18",
+"M84",
+"M104",
+"M105",
+"M106",
+"M109",
+"M112",
+"M114",
+"M140",
+"M190",
+"M220",
+"M221"
+]
+
+def parse_gcode_line(line):
+    """
+    Parses a single line of G-code and returns the command and its arguments.
+    """
+    line = line.strip()  # Remove leading/trailing whitespace
+    if not line or line.startswith(";"):  # Ignore empty lines and comments
+        return None
+
+    parts = line.split()
+    command = parts[0]  # The G-code command (e.g., G0, M104)
+    args = {}
+
+    for part in parts[1:]:
+        if "=" in part:
+            key, value = part.split("=")
+            args[key] = value
+        else:
+            key = part[0]
+            value = part[1:]
+            args[key] = value
+
+    return {"command": command, "args": args}
+
+
 # Example usage
 if __name__ == "__main__":
+    lastz = 0
     #move_to_pos(current_pos[0], current_pos[1], current_pos[2], 90)
     #move_to_pos(200, 0, 0, 90)
     #move_robot_to_pos(200, 0, 0, 90)
-    move_robot_to_pos(150, 0, 30, 90)
-    sleep(30)
-    move_robot_to_pos(0, 0, 50, 90)
+    with open("./benchy.gcode") as f:
+        lines = f.readlines()
+        specific_line = lines[29]  # Change the index to the line you want
+        gcode = parse_gcode_line(specific_line)
+        print("Parsed G-code:", gcode)
+        if("X" in gcode["args"]):
+            x = float(gcode["args"]["X"])
+        if("Y" in gcode["args"]):
+            y = float(gcode["args"]["Y"])
+
+        if("Z" in gcode["args"]):
+            z = float(gcode["args"]["Z"])
+            lastz = z
+        print("X:", x, "Y:", y, "Z:", lastz)
+        move_robot_to_pos(x, y, lastz, 90)
+        sleep(5)
+        move_robot_to_pos(150, 0, 30, 90)
+    # move_robot_to_pos(150, 0, 30, 90)
+    # sleep(30)
+    # move_robot_to_pos(0, 0, 50, 90)
     while True:
         plt.pause(0.1)  # Keep the plot open
