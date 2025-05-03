@@ -168,10 +168,18 @@ def move_robot_to_pos(x, y, z, g):
         }
         response = requests.get(f"{url}/smove_to_pos", params=params)
         print("Status Code:", response.status_code)
-        print("Response Text:", response.text)
+        #print("Response Text:", response.text)
     except Exception as e:
         print("Error sending position:", e)
 
+def visulize_pos(x, y, z):
+    """
+    Visualize the position of the robot arm in 3D space.
+    """
+    b , a1, a2 = calculate_angles(x, y, z)
+    print(f"Calculated angles (degrees):")
+    print(f"  Base: {b:.2f}, Arm1: {a1:.2f}, Arm2: {a2:.2f}")
+    visualize_arm(b, a1, a2)
 
 list_of_gcode = [   
 "G0",
@@ -242,11 +250,13 @@ if __name__ == "__main__":
             z = float(gcode["args"]["Z"])
             lastz = z
         print("X:", x, "Y:", y, "Z:", lastz)
+        #visulize_pos(0, 0, 0)
+        # visulize the start position
+        #visulize_pos(100, 0, 90)
         move_robot_to_pos(x, y, lastz, 90)
         sleep(5)
         move_robot_to_pos(150, 0, 30, 90)
-    # move_robot_to_pos(150, 0, 30, 90)
-    # sleep(30)
-    # move_robot_to_pos(0, 0, 50, 90)
+        sleep(5)
+        #move_robot_to_pos(0, 0, 0, 90)
     while True:
         plt.pause(0.1)  # Keep the plot open

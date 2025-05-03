@@ -217,22 +217,13 @@ class EEZYbotARM:
     def plot(self, **kwargs):
         """
         --Description--
-        Given angles q1, q2, q3, plot EEZybot arm and co-ordinate frames for all joints using matplotlib
-        Function computes the configuration of the manipulator and plots it using DH proximal convention.
+        Given angles q1, q2, q3, calculate joint positions for plotting EEZybot arm using matplotlib.
+        Function computes the configuration of the manipulator using DH proximal convention.
+
+        This function *calculates* the points but does *not* perform the plotting itself.
+        It returns the key joint positions needed for external plotting.
 
         The function will raise an exception if any of the angles are outside defined limits
-
-        The reference angle definitions are as follows:
-
-        - EzzyBot base (q1) : 0 degree position is facing directly forwards
-        - Main arm position (q2)
-        - Horarm position(q3)
-
-        --Required--
-        Helper functions required (included in the EEzybot code)
-        - plotCoOrd()
-        - set_axes_radius()
-        - set_axes_equal()
 
         --Optional **kwargs parameters--
         @q1 -> the value of the angle q1 (in degrees) as used in the kinematics model
@@ -240,154 +231,119 @@ class EEZYbotARM:
         @q3 -> the value of the angle q3 (in degrees) as used in the kinematics model
 
         --Returns--
-        fig, ax -> matplotlib figure and axes objects showing position of all actuator joints and links in world frame
-
+        joint_positions -> A dictionary containing key joint coordinates:
+                           {'base': [x,y,z], 'j2': [x,y,z], 'j3_elbow': [x,y,z], 'j4_wrist': [x,y,z], 'ee': [x,y,z],
+                            'a': [x,y,z], 'b': [x,y,z]}
+                           (Coordinates are in mm)
         """
 
         # Use **kwargs if provided, otherwise use current values
-        q1 = kwargs.get('q1', self.q1)
-        q2 = kwargs.get('q2', self.q2)
-        q3 = kwargs.get('q3', self.q3)
+        q1_deg = kwargs.get('q1', self.q1)
+        q2_deg = kwargs.get('q2', self.q2)
+        q3_deg = kwargs.get('q3', self.q3)
+
+        # Check limits first
+        self.checkErrorJointLimits(q1=q1_deg, q2=q2_deg, q3=q3_deg)
 
         # Convert angles to radians
-        q1 = q1 * pi/180
-        q2 = q2 * pi/180
-        q3 = q3 * pi/180
+        q1 = q1_deg * pi/180
+        q2 = q2_deg * pi/180
+        q3 = q3_deg * pi/180 # Note: q3 definition (relative to L2 extension)
 
-        # DH parameters (Proximal Convention),
+        # DH parameters (Proximal Convention), Link lengths
         L1 = self.L1
         L2 = self.L2
         L3 = self.L3
         L4 = self.L4
-        # Lengths for the links which attach to the hoarm
-        L2A = self.L2A
-        LAB = self.LAB
-        LB3 = self.LB3
+        # Lengths for the links which attach to the hoarm parallelogram linkage
+        L2A = self.L2A # Distance from J2 axis along L2 to point A
+        LAB = self.LAB # Length of link AB
+        LB3 = self.LB3 # Distance from J4 axis back along L3 to point B (Should match L2A for parallelogram)
 
-        # DH table
-        DH = np.array([[0,  0,     L1, q1],
-                       [0,  pi/2,  0,  q2],
-                       [L2, 0,     0,  q3],
-                       [L3, 0,     0,  0],
-                       [0,  -pi/2, 0,  0]])
+        # --- Calculate Joint Positions Directly ---
 
-        # Find number of rows in DH table
-        rows, cols = DH.shape
+        # Joint 1 (Base) - World Origin
+        Base_Pos = np.array([0.0, 0.0, 0.0])
 
-        # Pre-allocate Array to store Transformation matrix
-        T = np.zeros((4, 4, rows), dtype=float)
+        # Joint 2 (Shoulder rotation axis - on top of base)
+        J2_Pos = np.array([0.0, 0.0, L1])
 
-        # Determine transformation matrix between each frame
-        for i in range(rows):
-            T[:, :, i] = [[cos(DH[i, 3]),              -sin(DH[i, 3]),               0,             DH[i, 0]],
-                          [sin(DH[i, 3])*cos(DH[i, 1]),  cos(DH[i, 3]) *
-                           cos(DH[i, 1]), -sin(DH[i, 1]), -sin(DH[i, 1])*DH[i, 2]],
-                          [sin(DH[i, 3])*sin(DH[i, 1]),  cos(DH[i, 3]) *
-                           sin(DH[i, 1]),  cos(DH[i, 1]),  cos(DH[i, 1])*DH[i, 2]],
-                          [0,                          0,                          0,             1]]
+        # Joint 3 (Elbow)
+        J3_x = cos(q1) * (L2 * cos(q2))
+        J3_y = sin(q1) * (L2 * cos(q2))
+        J3_z = L1 + L2 * sin(q2)
+        J3_Pos = np.array([J3_x, J3_y, J3_z])
 
-        # Create the transformation frames with repect to the world frame (the base of the EEzybot arm)
+        # Joint 4 (Wrist)
+        J4_x = cos(q1) * (L2 * cos(q2) + L3 * cos(q2 + q3))
+        J4_y = sin(q1) * (L2 * cos(q2) + L3 * cos(q2 + q3))
+        J4_z = L1 + L2 * sin(q2) + L3 * sin(q2 + q3)
+        J4_Pos = np.array([J4_x, J4_y, J4_z])
 
-        # --- Calculate Transformation matrix to each frame wrt the base. (matrix dot multiplication)
-        T00 = np.identity(4)
-        T01 = T[:, :, 0]
-        T02 = T[:, :, 0].dot(T[:, :, 1])
-        T03 = T[:, :, 0].dot(T[:, :, 1]).dot(T[:, :, 2])
-        T04 = T[:, :, 0].dot(T[:, :, 1]).dot(T[:, :, 2]).dot(T[:, :, 3])
+        # End Effector (EE) - Offset by L4 from Wrist along the final link's direction
+        # Direction vector from Elbow (J3) to Wrist (J4)
+        J4_minus_J3 = J4_Pos - J3_Pos
+        norm_J4_minus_J3 = np.linalg.norm(J4_minus_J3)
+        if norm_J4_minus_J3 > 1e-6:
+             wrist_direction = J4_minus_J3 / norm_J4_minus_J3
+        else: # Handle case where elbow and wrist coincide (arm fully extended or folded)
+             # Use direction based on q2+q3 angle in the arm's plane
+             wrist_direction_x_plane = cos(q1) * cos(q2+q3)
+             wrist_direction_y_plane = sin(q1) * cos(q2+q3)
+             wrist_direction_z_plane = sin(q2+q3)
+             # Normalize this direction vector
+             norm_dir = np.sqrt(wrist_direction_x_plane**2 + wrist_direction_y_plane**2 + wrist_direction_z_plane**2)
+             if norm_dir > 1e-6:
+                wrist_direction = np.array([wrist_direction_x_plane, wrist_direction_y_plane, wrist_direction_z_plane]) / norm_dir
+             else: # Default to pointing along L2 if all else fails (e.g. q2+q3 = 0 or pi)
+                 # This case might need more careful handling depending on desired behavior at singularity
+                 dir_L2_x = cos(q1) * cos(q2)
+                 dir_L2_y = sin(q1) * cos(q2)
+                 dir_L2_z = sin(q2)
+                 norm_L2 = np.sqrt(dir_L2_x**2 + dir_L2_y**2 + dir_L2_z**2)
+                 if norm_L2 > 1e-6:
+                     wrist_direction = np.array([dir_L2_x, dir_L2_y, dir_L2_z]) / norm_L2
+                 else: # Failsafe: point straight up along Z if L2 is somehow zero length or q2=pi/2
+                     wrist_direction = np.array([0.0, 0.0, 1.0])
 
-        # --- Create frame 5 (note this is just a rotation of frame T04)
-        R5 = T04[0:3, 0:3]  # Find rotation matrix
-        T45 = np.zeros((4, 4))
-        T45[0:3, 0:3] = np.linalg.inv(R5)
-        T45[3, 3] = 1  # Create transformation matrix from frame 4 to frame 5
 
-        # Create the transformation matrix from the world frame to frame 5 (without z rotation)
-        T05 = T04.dot(T45)
+        EE_Pos = J4_Pos + L4 * wrist_direction
+        EE_Pos = np.round(EE_Pos, 3) # Apply rounding here after calculation
 
-        # --- Construct a transformation matrix to make the Z rotation of T05 by magnitude q1
-        TZRot = np.array([[cos(q1),  -sin(q1), 0, 0],
-                          [sin(q1),   cos(q1), 0, 0],
-                          [0,         0,       1, 0],
-                          [0,         0,       0, 1]])
+        # --- Calculate Parallelogram Linkage Points A and B ---
+        # Point A: On Link 2, distance L2A from Joint 2 axis
+        A_x = cos(q1) * (L2A * cos(q2))
+        A_y = sin(q1) * (L2A * cos(q2))
+        A_z = L1 + L2A * sin(q2)
+        A_Pos = np.array([A_x, A_y, A_z])
 
-        # Create the transformation matrix from the world frame to frame 5 (with z rotation)
-        T05_true = T05.dot(TZRot)
+        # Point B: On Link 3, distance LB3 from Joint 4 axis (measured back towards J3)
+        # Vector from J4 towards J3
+        J3_minus_J4 = J3_Pos - J4_Pos
+        norm_J3_minus_J4 = np.linalg.norm(J3_minus_J4)
+        if norm_J3_minus_J4 > 1e-6:
+            vec_J4_to_J3 = J3_minus_J4 / norm_J3_minus_J4
+        else: # Handle J3=J4 case
+            vec_J4_to_J3 = -wrist_direction # Opposite direction of wrist
 
-        # -- Create Frame EE (Do the same for the end effector frame)
-        T5EE = np.array([[1, 0, 0, L4 * cos(q1)],
-                         [0, 1, 0, L4 * sin(q1)],
-                         [0, 0, 1, 0],
-                         [0, 0, 0, 1]])
+        # For a parallelogram, LB3 should equal L2A.
+        B_Pos = J4_Pos + LB3 * vec_J4_to_J3
 
-        TEE = T05.dot(T5EE).dot(TZRot)  # translate and rotate !
+        # --- Create the dictionary to return ---
+        joint_positions = {
+            'base': Base_Pos.round(3).tolist(),
+            'j2': J2_Pos.round(3).tolist(),
+            'j3_elbow': J3_Pos.round(3).tolist(),
+            'j4_wrist': J4_Pos.round(3).tolist(),
+            'ee': EE_Pos.round(3).tolist(), # EE already rounded
+            'a': A_Pos.round(3).tolist(),
+            'b': B_Pos.round(3).tolist()
+        }
 
-        # --- Create the frames for the links which attach to the hoarm
-        q3_a = pi - (- q3)  # adjusted q3 value
+        # Optional: Keep the debug print if you like, or remove it
+        # print(f"plot method --> End effector calculated at: x:{EE_Pos[0]:.1f}, y:{EE_Pos[1]:.1f}, z:{EE_Pos[2]:.1f}")
 
-        # --- --- For Frame A
-
-        T2A_rot = np.array([[cos(q3_a),  -sin(q3_a), 0, 0],  # Rotation about z axis by q2
-                            [sin(q3_a),   cos(q3_a), 0, 0],
-                            [0,         0,       1, 0],
-                            [0,         0,       0, 1]])
-
-        T2A_trans = np.array([[1, 0, 0, L2A],  # Translation along x axis by distance L2A
-                              [0, 1, 0, 0],
-                              [0, 0, 1, 0],
-                              [0, 0, 0, 1]])
-
-        T2A = T2A_rot.dot(T2A_trans)
-
-        T0A = T02.dot(T2A)  # Frame for co-ordinate A
-
-        # --- --- For Frame B
-
-        TAB_rot = np.array([[cos(-(q3_a)),  -sin(-(q3_a)), 0, 0],  # Rotation about z axis by -(180-q2)
-                            [sin(-(q3_a)),   cos(-(q3_a)), 0, 0],
-                            [0,            0,          1, 0],
-                            [0,            0,          0, 1]])
-
-        TAB_trans = np.array([[1, 0, 0, LAB],  # Translation along x axis by distance L2A
-                              [0, 1, 0, 0],
-                              [0, 0, 1, 0],
-                              [0, 0, 0, 1]])
-
-        TAB = TAB_rot.dot(TAB_trans)
-
-        T0B = T0A.dot(TAB)  # Frame for co-ordinate A
-
-        # Defines the position of each joint.
-        # Joint 1 (This acts as the base)
-        Base = np.array([0, 0, 0])
-        J2_Pos = np.array([T01[0, 3], T01[1, 3], T01[2, 3]])  # Joint 2
-        J3_Pos = np.array([T02[0, 3], T02[1, 3], T02[2, 3]])  # Joint 3
-        # Joint 4. it is assumed that the origin of joint 4 and 5 coincide.
-        J4_Pos = np.array([T03[0, 3], T03[1, 3], T03[2, 3]])
-        J5_Pos = np.array([T04[0, 3], T04[1, 3], T04[2, 3]])
-        EE_Pos = np.array([TEE[0, 3], TEE[1, 3], TEE[2, 3]])
-        # --- Horarm joints
-        A_Pos = np.array([T0A[0, 3], T0A[1, 3], T0A[2, 3]])
-        B_Pos = np.array([T0B[0, 3], T0B[1, 3], T0B[2, 3]])
-
-        # Coordinates for each link.
-        Link1 = list(zip(Base, J2_Pos))   # From base to Joint 2
-        Link2 = list(zip(J2_Pos, J3_Pos))  # From Joint 2 to Joint 3
-        Link3 = list(zip(J3_Pos, J4_Pos))  # From Joint 3 to Joint 4
-        Link4 = list(zip(J4_Pos, J5_Pos))  # From Joint 4 to Joint 5
-        Link5 = list(zip(J5_Pos, EE_Pos))  # From Joint 5 to the end effector
-        # --- Horarm links
-        LinkA = list(zip(J2_Pos, A_Pos))  # From Joint 2 to Joint A
-        LinkB = list(zip(A_Pos, B_Pos))  # From Joint A to Joint B
-        LinkC = list(zip(B_Pos, J4_Pos))  # From Joint B to Joint 4
-
-        x_EE = round(float(TEE[0, 3]), 3)
-        y_EE = round(float(TEE[1, 3]), 3)
-        z_EE = round(float(TEE[2, 3]), 3)
-
-        # Debug step
-        print("plot_EEZYbotARM function --> End effector position (mm) is x: {}, y:{}, z:{}".format(x_EE, y_EE, z_EE))
-
-        return  J3_Pos, J4_Pos, J5_Pos, EE_Pos
+        return joint_positions # Make sure this line returns the dictionary
 
 
 
