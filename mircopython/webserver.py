@@ -16,7 +16,7 @@ sta.active(True)
 sta.connect(SSID, PASSWORD)
 
 # Define constants for Motor 1 (Base)
-DIR1 = 19
+DIR1 = 21
 STEP1 = 18
 STEPS_PER_REV1 = 100 # Example value, adjust as needed
 
@@ -60,6 +60,7 @@ def step_motor_generic(step_pin, dir_pin, delay_us, direction, steps_to_take):
 
 # Specific step functions for clarity (can call generic)
 def step_motor1(delay_us, direction, steps_to_take):
+    print(f"Motor 1: Spinning {'Clockwise' if direction else 'Anti-Clockwise'} for {steps_to_take} steps...")
     step_motor_generic(step_pin1, dir_pin1, delay_us, direction, steps_to_take)
 
 def step_motor2(delay_us, direction, steps_to_take):
@@ -210,6 +211,40 @@ def move_to_angle(b_deg, a1_deg, a2_deg, g_steps, step_delay_us=2000):
     print("Simultaneous move complete.")
     print(f"Reached positions: Motor 1: {current_position_1}, Motor 2: {current_position_2}, Motor 3: {current_position_3}")
 
+def move_by_steps(base_steps,base_dir, arm1_steps, arm1_dir, arm2_steps, arm2_dir,step_delay_us=2000):
+    """
+    Move motors by specified step counts and directions.
+    base_steps: Steps for Motor 1 (Base)
+    base_dir: Direction for Motor 1 (1 for CW, 0 for CCW)
+    arm1_steps: Steps for Motor 2 (Arm 1)
+    arm1_dir: Direction for Motor 2 (1 for CW, 0 for CCW)
+    arm2_steps: Steps for Motor 3 (Gripper)
+    arm2_dir: Direction for Motor 3 (1 for CW, 0 for CCW)
+    """
+    # Set directions
+    dir_pin1.value(arm2_dir)
+    dir_pin2.value(arm1_dir)
+    dir_pin3.value(base_dir)
+
+    # Perform simultaneous stepping
+    absolute_max_steps = max(abs(base_steps), abs(arm1_steps), abs(arm2_steps)) 
+    print(f"Moving motors by steps: {absolute_max_steps} steps max")
+    for i in range(absolute_max_steps):
+        if i < abs(base_steps):
+            step_pin3.value(1)
+        if i < abs(arm1_steps):
+            step_pin2.value(1)
+        if i < abs(arm2_steps):
+            step_pin1.value(1)
+
+        time.sleep_us(step_delay_us)
+
+        step_pin1.value(0)
+        step_pin2.value(0)
+        step_pin3.value(0)
+
+        time.sleep_us(step_delay_us)
+    
 
 def move_to_pos(x, y, z, g):
     """
@@ -706,6 +741,27 @@ while True:
                  move_to_position1(0)
                  move_to_position2(0)
                  move_to_position3(0) # Reset gripper to 0 steps too
+
+            elif path.startswith("/bmove_by_steps"):
+                #base_steps,base_dir, arm1_steps, arm1_dir, arm2_steps, arm2_dir
+                print("Moving motors by steps")
+                try:
+                    query_params_str = path.split('?')[1]
+                    query_params = {}
+                    for param in query_params_str.split('&'):
+                        key_value = param.split('=')
+                        if len(key_value) == 2:
+                            query_params[key_value[0]] = key_value[1]
+                    base_steps = int(query_params.get('base_steps', 0))
+                    base_dir = int(query_params.get('base_dir', 0))
+                    arm1_steps = int(query_params.get('arm1_steps', 0))
+                    arm1_dir = int(query_params.get('arm1_dir', 0))
+                    arm2_steps = int(query_params.get('arm2_steps', 0))
+                    arm2_dir = int(query_params.get('arm2_dir', 0))
+                    print(f"Moving motors by steps: Base={base_steps}, Arm1={arm1_steps}, Arm2={arm2_steps}")
+                    move_by_steps(base_steps, base_dir, arm1_steps, arm1_dir, arm2_steps, arm2_dir)
+                except:
+                    print("Error parsing /move_by_steps request:")
 
 
             # For any other GET request, serve the main page
