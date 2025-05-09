@@ -1,10 +1,17 @@
 # Import EEZYbotARM library
 from easyEEZYbotARM.kinematic_model import EEZYbotARM_Mk2
+import matplotlib.pyplot as plt
 import requests
+import time
 # Initialise robot arm with initial joint angles
 myRobotArm = EEZYbotARM_Mk2(initial_q1=0, initial_q2=90, initial_q3=-90)
-myRobotArm.plot()  # plot it
+starting_x = 234.0
+starting_y = 0.0
+starting_z = 227.0
+print(myRobotArm.forwardKinematics(q1=0, q2=90, q3=-90))  # Forward kinematics to get the end effector position
+
 url = "http://10.0.0.114"
+
 # Assign cartesian position where we want the robot arm end effector to move to
 # (x,y,z in mm from centre of robot base)
 x = 240  # mm
@@ -66,20 +73,132 @@ def convert_to_stepper_angle(a1, a2, a3):
     except Exception as e:
         print("Error sending steps:", e)
         
-convert_to_stepper_angle(a1, a2, a3)
-# Visualise the new joint angles
-myRobotArm.updateJointAngles(q1=a1, q2=a2, q3=a3)
-print('The new joint angles are q1 = {}, q2= {}, q3 = {}'.format(myRobotArm.q1, myRobotArm.q2, myRobotArm.q3))
-myRobotArm.plot()
-# try:
-#     params = {
-#         "x": x,
-#         "y": y,
-#         "z": z
-#     }
-#     response = requests.get(f"{url}/smove_to_pos", params=params)
-#     print("Status Code:", response.status_code)
-#     #print("Response Text:", response.text)
-# except Exception as e:
-#     print("Error sending position:", e)
-# #http://10.0.0.114/tmove_to_angle_cmd?b=19.5&a1=80.2&a2=-90.1&g=0
+
+
+def move_to_position(x, y, z):
+    # Compute inverse kinematics
+    a1, a2, a3 = myRobotArm.inverseKinematics(x, y, z)
+    print('To move the end effector to the cartesian position (mm) x={}, y={}, z={}, the robot arm joint angles (degrees)  are q1 = {}, q2= {}, q3 = {}'.format(x, y, z, a1, a2, a3))
+    convert_to_stepper_angle(a1, a2, a3)
+    myRobotArm.updateJointAngles(q1=a1, q2=a2, q3=a3)
+    print('The new joint angles are q1 = {}, q2= {}, q3 = {}'.format(myRobotArm.q1, myRobotArm.q2, myRobotArm.q3))
+    myRobotArm.plot()
+    
+
+def move_to_start():
+    # Move to starting position
+    print('Moving to starting position')
+    move_to_position(starting_x, starting_y, starting_z)
+
+def check_joint_limits(x, y, z):
+    # Check if the position is within joint limits
+    q1, q2, q3 = myRobotArm.inverseKinematics(x, y, z)
+    if myRobotArm.checkErrorJointLimits(q1=q1, q2=q2, q3=q3):
+        print("Position is within joint limits.")
+        return True
+    else:
+        print("Position exceeds joint limits.")
+        return False
+
+def visualise_joint_angles(x, y, z):
+    # Visualise the new joint angles
+    a1, a2, a3 = myRobotArm.inverseKinematics(x, y, z)
+    print('To move the end effector to the cartesian position (mm) x={}, y={}, z={}, the robot arm joint angles (degrees)  are q1 = {}, q2= {}, q3 = {}'.format(x, y, z, a1, a2, a3))
+    myRobotArm.q1 = a1
+    myRobotArm.q2 = a2
+    myRobotArm.q3 = a3
+    print('The new joint angles are q1 = {}, q2= {}, q3 = {}'.format(myRobotArm.q1, myRobotArm.q2, myRobotArm.q3))
+    myRobotArm.plot()
+# move_to_position(x, y, z)
+# time.sleep(10)
+# move_to_start()
+# # Visualise the new joint angles
+
+current_z = 150
+def move_to_gcode(gcode):
+    global current_z
+    # inverse kinematics
+    # Extract the G-code command and arguments
+    command = gcode.get("command")
+    args = gcode.get("args")
+    if command in list_of_gcode:
+        if command == "G0" or command == "G1":
+            if "X" in args and "Y" in args:
+                # Extract X, Y, Z coordinates from the arguments
+                x = float(args.get("X", 0)) + 140
+                y = float(args.get("Y", 0)) - 50 
+                if "Z" in args:
+                    z = float(args.get("Z", 0)) + 150
+                    current_z = z
+                    print(f"Moving to position: X={x}, Y={y}, Z={z}")
+                else:
+                    z = current_z
+                    print(f"Moving to position without z: X={x}, Y={y}, Z={z}")
+                # move_to_position(x, y, z)
+                #visualise_joint_angles(x, y, z)
+                check_joint_limits(x, y, z)
+                
+
+list_of_gcode = [   
+"G0",
+"G1",
+"G2",
+"G3",
+"G4",
+"G28",
+"G90",
+"G91",
+"G92",
+"M0",
+"M18",
+"M84",
+"M104",
+"M105",
+"M106",
+"M109",
+"M112",
+"M114",
+"M140",
+"M190",
+"M220",
+"M221"
+]
+
+def parse_gcode_line(line):
+    """
+    Parses a single line of G-code and returns the command and its arguments.
+    """
+    line = line.strip()  # Remove leading/trailing whitespace
+    if not line or line.startswith(";"):  # Ignore empty lines and comments
+        return None
+
+    parts = line.split()
+    command = parts[0]  # The G-code command (e.g., G0, M104)
+    args = {}
+
+    for part in parts[1:]:
+        if "=" in part:
+            key, value = part.split("=")
+            args[key] = value
+        else:
+            key = part[0]
+            value = part[1:]
+            args[key] = value
+
+    return {"command": command, "args": args}
+
+with open("./mircopython/3DBenchy_PLA_1h6m.gcode") as f:
+        count = 0
+        for line in f:
+            gcode = parse_gcode_line(line)
+            if gcode and count > 401:
+                print("Parsed G-code:", gcode)
+                move_to_gcode(gcode)
+                #time.sleep(0.1)
+            print("CURRENT LINE:", line, "COUNT:", count)
+            count += 1
+        # lines = f.readlines()
+        # specific_line = lines[29]  # Change the index to the line you want
+        # gcode = parse_gcode_line(specific_line)
+        # print("Parsed G-code:", gcode)
+        # move_to_gcode(gcode)
